@@ -1,0 +1,27 @@
+All Users:
+/signup
+/login
+
+Normal Users:
+[POST] /user/<id>/resource # Create if quota allows
+[GET] /user/<id>/resources # list all
+[GET] /user/<id>/resource/<id> # list one
+[DELETE] /user/<id>/resource/<id> # delete one
+
+As Admin:
+[GET] /user/<id>/sub-users # list users
+[POST] /user/<id>/sub-users # create users
+[GET] /user/<id>/sub-user/<sub-user-id> # list user and its resources
+[DELETE] /user/<id>/sub-user/<sub-user-id> # delete user and its resources
+[POST] /user/<id>/sub-user/<sub-user-id>/quota # set quota for user
+[GET] /user/<id>/sub-user/<sub-user-id>/quota # get quota for user
+
+Entities:
+- Users and Admin
+- Resources and Quota
+
+
+ /user/<id>
+ /user/<id>/resources
+ /user/<id>/resource/<id>
+ 
