@@ -1,7 +1,8 @@
-from flask import request, json
+from flask import request
 from flask_restful import Resource as BaseResource
-from project.models import User, Resource
+
 from project import bcrypt
+from project.models import User, Resource
 
 
 class UserViews(BaseResource):
@@ -11,7 +12,8 @@ class UserViews(BaseResource):
         if user:
             return {'user_id': user.id,
                     'email': user.email,
-                    'message': 'success'
+                    'message': 'success',
+                    'quota': user.quota or 'Not set'
                     }
         return {'message': 'Cannot find User.'}
 
@@ -98,7 +100,7 @@ class ResourceViews(BaseResource):
         user = User.query.get(owner_id)
         if not user:
             return {'message': 'Cannot find user.'}
-        if len(user.resources) >= user.quota:
+        if user.quota and len(user.resources) >= user.quota:
             return {'message': 'User with ID: {id} cannot have more resource since quota is over.'.format(id=owner_id)}
 
         if not resource_name:
@@ -113,6 +115,9 @@ class ResourceViews(BaseResource):
 
     def get(self, user_id, resource_id=None):
         user = User.query.get(user_id)
+        if not user:
+            return {'message': 'User not found'}
+
         if resource_id:
             resource = Resource.query.get(resource_id)
             if resource:
@@ -122,26 +127,31 @@ class ResourceViews(BaseResource):
                             'owner_id': resource.owner_id,
                             'id': resource.id
                             }
-        return {'message': 'Resource not found'}
+        return {'message': 'Resource not found. Please check the ID.'}
 
 
 class ListResourceViews(BaseResource):
     def get(self, user_id):
         user = User.query.get(user_id)
+        if not user:
+            return {'message': 'User not found'}
+
         owner_id = request.args.get('owner', 0)
         owner = User.query.get(owner_id)
         data = []
         if user.is_admin:
             if owner:
-                resources = Resource.query.filter(Resource.owner_id == owner_id).all()
+                resources = Resource.query.filter(
+                    Resource.owner_id == owner_id).all()
             else:
                 resources = Resource.query.all()
         else:
-            resources = Resource.query.filter(Resource.owner_id == user_id).all()
+            resources = Resource.query.filter(
+                Resource.owner_id == user_id).all()
         if resources:
             for each_res in resources:
                 data.append({'resource_name': each_res.name,
-                             'res_id': each_res.id,
+                             'resource_id': each_res.id,
                              'associated_user_id': each_res.owner.id,
                              'associated_user_email': each_res.owner.email,
                              })
@@ -159,5 +169,23 @@ class ListResourceViews(BaseResource):
 
 
 class AdminViews(BaseResource):
-    def get(self):
-        pass
+    def get(self, user_id):
+        user = User.query.get(user_id)
+        data = []
+        if user and user.is_admin:
+            all_users = User.query.all()
+            if all_users:
+                for each_user in all_users:
+                    data.append({'user_id': each_user.id,
+                                 'user_email': each_user.email,
+                                 'quota': each_user.quota,
+                                 'resources': [{'resource_name': x.name,
+                                                'resource_id': x.id}
+                                               for x in each_user.resources],
+                                 })
+            return {'user_id': user.id,
+                    'email': user.email,
+                    'message': 'success',
+                    'users_data': data
+                    }
+        return {'message': 'You don\'t have privilage to view this.'}

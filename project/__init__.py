@@ -1,4 +1,3 @@
-from views import UserViews, ResourceViews, ListResourceViews
 import os
 
 from flask import Flask
@@ -18,7 +17,10 @@ db = SQLAlchemy(app)
 
 api = Api(app)
 
+from views import UserViews, ResourceViews, ListResourceViews, AdminViews  # noqa
+
 api.add_resource(UserViews,
+                 '/user',
                  '/user/<int:user_id>'
                  )
 api.add_resource(ResourceViews,
@@ -28,5 +30,6 @@ api.add_resource(ResourceViews,
 api.add_resource(ListResourceViews,
                  '/user/<int:user_id>/resources'
                  )
-
-# flask-login
+api.add_resource(AdminViews,
+                 '/user/<int:user_id>/users'
+                 )
