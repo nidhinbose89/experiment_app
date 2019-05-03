@@ -1,13 +1,47 @@
-from flask import request
+"""View Functions."""
+from flask import request, jsonify
 from flask_restful import Resource as BaseResource
+from flask_login import (login_user, current_user,
+                         login_required, logout_user)
 
-from project import bcrypt
+from project import app, bcrypt, login_manager
 from project.models import User, Resource
+EXCLUDE_AUTH_VIEWS = ['login', 'logout']
+
+
+@login_manager.user_loader
+def user_loader(user_id):
+    """Given *user_id*, return the associated User object or None."""
+    user = User.query.get(user_id)
+    if user:
+        return user
+
+
+@app.before_request
+def require_authorization():
+    """BEFORE REQUEST HANDLER. Require Authorization."""
+    if any([x for x in EXCLUDE_AUTH_VIEWS if x in request.path]):
+        return None
+    # print view_func.exclude_from_authorization
+    if current_user.is_authenticated():
+        get_token_decode_data = current_user.decode_auth_token(request.headers.get("Authorization"))
+        if not get_token_decode_data.get("result"):
+            return jsonify({'message': get_token_decode_data.get("message")})
+
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    """Unauthorized activity handler."""
+    return {"message": "Unauthorized activity. Please contact admin."}
 
 
 class UserViews(BaseResource):
+    """User related views."""
+
+    decorators = [login_required]
 
     def get(self, user_id):
+        """GET method handler."""
         user = User.query.get(user_id)
         if user:
             return {'user_id': user.id,
@@ -15,9 +49,10 @@ class UserViews(BaseResource):
                     'message': 'success',
                     'quota': user.quota or 'Not set'
                     }
-        return {'message': 'Cannot find User.'}
+        return {'message': 'Cannot find User.'}, 401
 
     def post(self):
+        """POST method handler."""
         # create user if the current user is admin
         email = request.form.get('email')
         password = request.form.get('password')
@@ -44,6 +79,7 @@ class UserViews(BaseResource):
                     }
 
     def put(self, user_id):
+        """PUT method handler."""
         user = User.query.get(user_id)
         if not user:
             return {'message': 'Cannot find User.'}
@@ -72,6 +108,7 @@ class UserViews(BaseResource):
                     }
 
     def delete(self, user_id):
+        """DELETE method handler."""
         # if current user is admin
         user = User.query.get(user_id)
         try:
@@ -189,3 +226,44 @@ class AdminViews(BaseResource):
                     'users_data': data
                     }
         return {'message': 'You don\'t have privilage to view this.'}
+
+
+class LoginViews(BaseResource):
+
+    def post(self):
+        """Login the user and return auth key."""
+        try:
+            # fetch the user data
+            user = User.query.filter_by(
+                email=request.form.get('email'),
+            ).first()
+            if user and user.check_password(request.form.get('password')):
+                login_user(user, remember=True)
+                auth_token = user.encode_auth_token()
+                if auth_token:
+                    response = {
+                        'status': 'success',
+                        'message': 'Successfully logged in.',
+                        'auth_token': auth_token.decode()
+                    }
+                    return response, 200
+            else:
+                return {'message': 'User not found for the provided credentials.'}, 200
+        except Exception, e:
+            response = {
+                'message': 'Error occured. {message}. Try again'.format(message=e)
+            }
+            return response, 500
+
+class LogoutViews(BaseResource):
+
+    def post(self):
+        """Logout user."""
+        if not current_user.is_authenticated:
+            return {
+                "message": "No user logged-in.",
+            }
+        logout_user()
+        return {
+            "message": "User logged out successfully.",
+        }
