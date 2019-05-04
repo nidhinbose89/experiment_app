@@ -21,3 +21,4 @@ export APP_SETTINGS='project.config.DevelopmentConfig'
 -- Docker setup.
 -- Add test suite.
 -- Add token to be refreshed with login.
+-- Invalidate old token for the same user.

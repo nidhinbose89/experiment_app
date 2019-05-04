@@ -23,7 +23,7 @@ def require_authorization():
     if any([x for x in EXCLUDE_AUTH_VIEWS if x in request.path]):
         return None
     # print view_func.exclude_from_authorization
-    if current_user.is_authenticated():
+    if current_user.is_authenticated:
         get_token_decode_data = current_user.decode_auth_token(request.headers.get("Authorization"))
         if not get_token_decode_data.get("result"):
             return jsonify({'message': get_token_decode_data.get("message")})
@@ -33,6 +33,15 @@ def require_authorization():
 def unauthorized():
     """Unauthorized activity handler."""
     return {"message": "Unauthorized activity. Please contact admin."}
+
+
+def admin_view(func):
+    """Decorator to check if current_user is admin."""
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return {'message': 'You are not privilaged to perform this action.'}
+        return func(*args, **kwargs)
+    return wrapper
 
 
 class UserViews(BaseResource):
@@ -46,14 +55,16 @@ class UserViews(BaseResource):
         if user:
             return {'user_id': user.id,
                     'email': user.email,
+                    'is_admin': user.is_admin,
                     'message': 'success',
                     'quota': user.quota or 'Not set'
                     }
         return {'message': 'Cannot find User.'}, 401
 
+    @admin_view
     def post(self):
         """POST method handler."""
-        # create user if the current user is admin
+        # import ipdb; ipdb.set_trace()
         email = request.form.get('email')
         password = request.form.get('password')
         quota = request.form.get('quota', None)
@@ -83,13 +94,29 @@ class UserViews(BaseResource):
         user = User.query.get(user_id)
         if not user:
             return {'message': 'Cannot find User.'}
-        password = request.form.get('password', user.email)
+        # admin has access to all
+        if current_user != user:
+            if not current_user.is_admin:
+                return {'message': 'You are not privilaged to perform this action.'}
+        password = request.form.get('password')
         previous_password = request.form.get('previous_password')
-        if password and previous_password:
+        quota = request.form.get('quota', None)
+        if current_user.is_admin:
+            if not password:
+                password = user.password
+            if not quota:
+                quota = user.quota
+        else:
+            if quota:
+                return {'message': 'You are not privilaged to update quota. Contact admin.'}
+            else:
+                # but quota needs to be set if not present :)
+                quota = user.quota
+            if not password or not previous_password:
+                return {'message': 'Password data incomplete.'}
             if not bcrypt.check_password_hash(user.password, previous_password):
                 return {'message': 'Previous password is wrong.'}
-            user.password = bcrypt.generate_password_hash(password)
-        quota = request.form.get('quota', user.quota)
+        user.password = bcrypt.generate_password_hash(password)
         is_admin = request.form.get('is_admin', user.admin)
         user.admin = is_admin
         user.quota = quota
@@ -107,9 +134,9 @@ class UserViews(BaseResource):
                     'quota': user.quota,
                     }
 
+    @admin_view
     def delete(self, user_id):
         """DELETE method handler."""
-        # if current user is admin
         user = User.query.get(user_id)
         try:
             user.delete()
@@ -126,6 +153,7 @@ class UserViews(BaseResource):
 
 
 class ResourceViews(BaseResource):
+    decorators = [login_required]
 
     def post(self, user_id, resource_id=None):
         # create resource for that user
@@ -168,6 +196,8 @@ class ResourceViews(BaseResource):
 
 
 class ListResourceViews(BaseResource):
+    decorators = [login_required]
+
     def get(self, user_id):
         user = User.query.get(user_id)
         if not user:
@@ -206,7 +236,12 @@ class ListResourceViews(BaseResource):
 
 
 class AdminViews(BaseResource):
+    """Admin views."""
+
+    decorators = [login_required, admin_view]
+
     def get(self, user_id):
+        """Admin GET of all user details."""
         user = User.query.get(user_id)
         data = []
         if user and user.is_admin:
@@ -215,6 +250,7 @@ class AdminViews(BaseResource):
                 for each_user in all_users:
                     data.append({'user_id': each_user.id,
                                  'user_email': each_user.email,
+                                 'is_admin': each_user.is_admin,
                                  'quota': each_user.quota,
                                  'resources': [{'resource_name': x.name,
                                                 'resource_id': x.id}
@@ -229,6 +265,7 @@ class AdminViews(BaseResource):
 
 
 class LoginViews(BaseResource):
+    """Login views."""
 
     def post(self):
         """Login the user and return auth key."""
@@ -243,6 +280,9 @@ class LoginViews(BaseResource):
                 if auth_token:
                     response = {
                         'status': 'success',
+                        'id': user.id,
+                        'email': user.email,
+                        'quota': user.quota,
                         'message': 'Successfully logged in.',
                         'auth_token': auth_token.decode()
                     }
@@ -255,7 +295,9 @@ class LoginViews(BaseResource):
             }
             return response, 500
 
+
 class LogoutViews(BaseResource):
+    """Logout views."""
 
     def post(self):
         """Logout user."""
