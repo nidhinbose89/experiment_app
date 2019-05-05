@@ -1,24 +1,19 @@
-# To install all the requirements
-pip install -r requirements.txt
+# To run locally
+ --> pip install -r requirements.txt
 
-# To set the configuration
-export APP_SETTINGS='project.config.DevelopmentConfig'
+# Docker setup
 
-# To init DB
-./manage.py db init
+## To build
+ --> docker build --tag chainstack_app .
 
-# To create DB
-./manage.py create_db
+## To run
+ --> docker run --name python-app -p 5000:5000 chainstack_app
 
-# To migrate DB
- ./manage.py db migrate
-
-# To create admin
-./manage.py create_admin
+## To stop and remove container
+ --> docker rm $(docker stop $(docker ps -a -q  --filter ancestor=chainstack_app))
 
 
 #TODO
--- Docker setup.
 -- Add test suite.
 -- Add token to be refreshed with login.
 -- Invalidate old token for the same user.

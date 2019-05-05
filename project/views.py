@@ -22,7 +22,6 @@ def require_authorization():
     """BEFORE REQUEST HANDLER. Require Authorization."""
     if any([x for x in EXCLUDE_AUTH_VIEWS if x in request.path]):
         return None
-    # print view_func.exclude_from_authorization
     if current_user.is_authenticated:
         get_token_decode_data = current_user.decode_auth_token(request.headers.get("Authorization"))
         if not get_token_decode_data.get("result"):
